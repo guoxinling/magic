@@ -9,32 +9,40 @@
         /* 加载与启动界面 */
         #loader {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; color: #ff4d4d; display: flex; flex-direction: column;
+            background: #000; color: #fff; display: flex; flex-direction: column;
             align-items: center; justify-content: center; z-index: 100;
             padding: 20px; text-align: center;
         }
         .sparkle-loader { font-size: 60px; animation: magicFlash 2s infinite; margin-bottom: 20px; }
         @keyframes magicFlash { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.1); } }
         
-        .magic-text { font-size: 18px; letter-spacing: 1px; color: #00e5ff; margin-bottom: 30px; line-height: 1.6; }
+        .magic-text { font-size: 18px; color: #00e5ff; margin-bottom: 30px; line-height: 1.6; }
 
-        /* 魔法启动按钮 */
+        /* 启动按钮 */
         #start-btn {
             padding: 15px 40px; font-size: 20px; color: #fff;
             background: transparent; border: 2px solid #00e5ff; border-radius: 30px;
             cursor: pointer; transition: all 0.3s; box-shadow: 0 0 15px #00e5ff;
-            display: none; /* 初始隐藏，等照片预加载完显示 */
-            animation: pulse 1.5s infinite;
+            display: none; animation: pulse 1.5s infinite;
         }
-        #start-btn:hover { background: #00e5ff; color: #000; box-shadow: 0 0 30px #00e5ff; }
+        #start-btn:hover { background: #00e5ff; color: #000; }
         @keyframes pulse { 0% { box-shadow: 0 0 5px #00e5ff; } 50% { box-shadow: 0 0 25px #00e5ff; } 100% { box-shadow: 0 0 5px #00e5ff; } }
 
-        #video-input { position: fixed; transform: scaleX(-1); width: 140px; bottom: 15px; right: 15px; border: 2px solid #00e5ff; border-radius: 10px; opacity: 0.1; z-index: 10; }
-        #status { position: fixed; top: 20px; left: 20px; color: #00e5ff; font-family: monospace; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; border-left: 3px solid #00e5ff; z-index: 10; }
+        /* 视频小窗 */
+        #video-input { position: fixed; transform: scaleX(-1); width: 140px; bottom: 15px; right: 15px; border: 2px solid #00e5ff; border-radius: 10px; opacity: 0.3; z-index: 10; }
+        
+        /* 照片展示 */
         #photo-display {
-            position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-            width: 350px; border: 10px solid white; box-shadow: 0 25px 60px rgba(0,0,0,0.8);
-            display: none; z-index: 5;
+            position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%);
+            max-width: 80%; max-height: 60%; border: 8px solid white; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.9); display: none; z-index: 5;
+        }
+
+        /* 每张照片的文案 */
+        #photo-caption {
+            position: absolute; top: 82%; left: 50%; transform: translateX(-50%);
+            color: white; font-size: 24px; text-shadow: 2px 2px 10px rgba(0,0,0,1);
+            text-align: center; width: 90%; z-index: 6; display: none; font-weight: bold;
         }
     </style>
 </head>
@@ -45,14 +53,12 @@
 
     <div id="loader">
         <div class="sparkle-loader">✨</div>
-        <div class="magic-text" id="loader-msg">
-            正在注入魔法能量，请稍候...
-        </div>
+        <div class="magic-text" id="loader-msg">正在准备魔法能量...</div>
         <button id="start-btn">开启魔法 ✨</button>
     </div>
 
-    <div id="status">准备就绪</div>
-    <img id="photo-display" src="" alt="回忆珍藏">
+    <img id="photo-display" src="" alt="回忆">
+    <div id="photo-caption"></div>
     <video id="video-input" autoplay playsinline></video>
 
     <script type="importmap">
@@ -64,58 +70,71 @@
     <script type="module">
         import * as THREE from 'three';
 
+        // ==========================================
+        // 1. 在这里修改你的 15 张照片配文
+        // ==========================================
+        const photoCaptions = [
+            "应该是我给你拍的第一张照片吧",
+            "这小伙子侧脸挺帅啊",
+            "唯二的结婚合照，噗/太可怜了",
+            "最喜欢这一张了，又帅又阳光",
+            "交友软件里的绝杀照吧，/坏笑",
+            "我朋友圈的官宣照",
+            "命运齿轮在此刻开始转动了",
+            "好奇，还抱得动我吗？",
+            "恭喜你和我一起出月子",
+            "还记得这在哪里吗？",
+            "还记得这在哪里吗？",
+            "还记得这在哪里吗？",
+            "被迫营业笑一下吧",
+            "一脸慈祥的富家少爷",
+            "哟吼这小伙子嫩帅哩！结束后请继续捏合双手..."
+        ];
+
         const photoUrls = Array.from({length: 15}, (_, i) => `./images/pic${i+1}.jpg`);
         const audioBgm = document.getElementById('audio-bgm');
         const audioBirthday = document.getElementById('audio-birthday');
         const photoElement = document.getElementById('photo-display');
+        const captionElement = document.getElementById('photo-caption');
         const startBtn = document.getElementById('start-btn');
         const loaderMsg = document.getElementById('loader-msg');
-        const MAX_PHOTOS = 15;
-
+        
         let photoCount = 0;
-        let imagesLoaded = 0;
+        let imagesProcessed = 0;
         let isBirthdayMode = false;
         let currentMode = "FREE"; 
         let isArmed = false;
 
-        // --- 1. 强力预加载逻辑 ---
+        // 预加载逻辑
         function preloadAssets() {
             photoUrls.forEach((url) => {
                 const img = new Image();
                 img.src = url;
-                img.onload = () => {
-                    imagesLoaded++;
-                    checkReady();
-                };
-                img.onerror = () => {
-                    console.warn("跳过加载失败的文件:", url);
-                    imagesLoaded++;
-                    checkReady();
-                };
+                img.onload = () => { imagesProcessed++; updateProgress(); };
+                img.onerror = () => { imagesProcessed++; updateProgress(); }; 
             });
+            setTimeout(() => { if(startBtn.style.display !== "block") showStartButton(); }, 5000);
         }
 
-        function checkReady() {
-            if (imagesLoaded >= MAX_PHOTOS) {
-                loaderMsg.innerHTML = "请帅气的人类将手放在摄像头前，准备施展魔法吧！<br>你只需要一张一合，试试吧！";
-                startBtn.style.display = "block"; // 加载完照片后才显示按钮
-            } else {
-                loaderMsg.innerHTML = `魔法能量填充中... (${imagesLoaded}/${MAX_PHOTOS})`;
-            }
+        function updateProgress() {
+            if (imagesProcessed >= 15) showStartButton();
+            else loaderMsg.innerHTML = `正在收集美好的回忆... (${imagesProcessed}/15)`;
+        }
+
+        function showStartButton() {
+            loaderMsg.innerHTML = "所有回忆已就绪<br>请帅气的人类打开摄像头，准备见证魔法";
+            startBtn.style.display = "block";
         }
         preloadAssets();
 
-        // --- 2. 按钮点击启动 ---
+        // 启动魔法
         startBtn.onclick = () => {
-            // 播放背景音乐（解决权限问题）
-            audioBgm.play().catch(e => console.log("音频播放受阻"));
-            
-            // 隐藏按钮，开始摄像头
+            audioBgm.play().catch(e => console.log("等待交互"));
             startBtn.style.display = "none";
-            loaderMsg.innerHTML = "正在连接魔法感应器（摄像头）...";
+            loaderMsg.innerHTML = "正在启动魔法感应器...";
             
             const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.8, minTrackingConfidence: 0.8 });
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.75, minTrackingConfidence: 0.75 });
             hands.onResults(onResults);
 
             const cameraUtils = new Camera(document.getElementById('video-input'), {
@@ -123,11 +142,9 @@
                 width: 640, height: 480
             });
             cameraUtils.start();
-            
-            animate(); // 启动渲染
+            animate();
         };
 
-        // --- 3. 手势与渲染逻辑 ---
         function onResults(results) {
             document.getElementById('loader').style.display = 'none';
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -138,23 +155,26 @@
                 fingertips.forEach(f => avgDist += Math.hypot(f.x - wrist.x, f.y - wrist.y));
                 avgDist /= 4;
 
-                if (avgDist < 0.25) { // 捏合
+                if (avgDist < 0.28) { // 捏合
                     if (currentMode !== "HEART") {
                         photoElement.style.display = 'none';
+                        captionElement.style.display = 'none';
                         currentMode = "HEART";
                         isArmed = true;
-                        if (photoCount >= MAX_PHOTOS && !isBirthdayMode) {
+                        if (photoCount >= 15 && !isBirthdayMode) {
                             audioBgm.pause();
                             audioBirthday.play();
                             isBirthdayMode = true;
                         }
                     }
-                } else if (avgDist > 0.48) { // 张开
+                } else if (avgDist > 0.45) { // 张开
                     if (isArmed) {
                         triggerBurst(1.8); 
-                        if (photoCount < MAX_PHOTOS) {
+                        if (photoCount < 15) {
                             photoElement.src = photoUrls[photoCount];
                             photoElement.style.display = 'block';
+                            captionElement.innerHTML = photoCaptions[photoCount];
+                            captionElement.style.display = 'block';
                             photoCount++;
                         }
                         isArmed = false;
@@ -164,7 +184,7 @@
             }
         }
 
-        // --- Three.js 初始化代码 (保持不变) ---
+        // --- 粒子系统初始化 ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -172,20 +192,24 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        const count = 35000;
+        const count = 30000;
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(count * 3);
         const velocities = new Float32Array(count * 3);
         const colors = new Float32Array(count * 3);
         const heartTargets = new Float32Array(count * 3);
-        const msg1Targets = createTextPoints("老公 生日快乐 🎂", 85, 0.1);
-        const msg2Targets = createTextPoints("我爱你哦 ❤️", 110, 0.12);
+        
+        // ==========================================
+        // 2. 在这里修改最后的告白文字内容
+        // ==========================================
+        const msg1Targets = createTextPoints("老公 生日快乐 🎂", 85, 0.12);
+        const msg2Targets = createTextPoints("我爱你 ❤️", 95, 0.14);
 
         for(let i = 0; i < count; i++) {
             const t = Math.random() * Math.PI * 2;
             heartTargets[i*3] = 16 * Math.pow(Math.sin(t), 3) * 0.45;
             heartTargets[i*3+1] = (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) * 0.45;
-            positions[i*3] = (Math.random()-0.5)*50; positions[i*3+1] = (Math.random()-0.5)*50;
+            positions[i*3] = (Math.random()-0.5)*60; positions[i*3+1] = (Math.random()-0.5)*60;
         }
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -197,8 +221,8 @@
 
         function triggerBurst(power) {
             for(let i=0; i<count; i++) {
-                velocities[i*3] += (Math.random()-0.5) * 20 * power;
-                velocities[i*3+1] += (Math.random()-0.5) * 20 * power;
+                velocities[i*3] += (Math.random()-0.5) * 25 * power;
+                velocities[i*3+1] += (Math.random()-0.5) * 25 * power;
             }
         }
 
@@ -211,18 +235,18 @@
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(text, 500, 150);
             const data = ctx.getImageData(0, 0, 1000, 300).data;
-            const points = [];
+            const pts = [];
             for (let y = 0; y < 300; y += 2) {
                 for (let x = 0; x < 1000; x += 2) {
-                    if (data[(y * 1000 + x) * 4] > 120) {
-                        points.push({ x: (x - 500) * spread, y: (150 - y) * spread });
+                    if (data[(y * 1000 + x) * 4] > 128) {
+                        pts.push({ x: (x - 500) * spread, y: (150 - y) * spread });
                     }
                 }
             }
-            return points;
+            return pts;
         }
 
-        const fadePlane = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 }));
+        const fadePlane = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 }));
         fadePlane.position.z = -5; scene.add(fadePlane);
 
         function animate() {
@@ -232,29 +256,28 @@
             for(let i = 0; i < count; i++) {
                 let x = posAttr.getX(i), y = posAttr.getY(i);
                 let vx = velocities[i*3], vy = velocities[i*3+1];
-                let tx, ty;
                 if (currentMode === "HEART") {
-                    if (photoCount < MAX_PHOTOS) {
+                    let tx, ty;
+                    if (photoCount < 15) {
                         tx = heartTargets[i*3]; ty = heartTargets[i*3+1];
-                        colorAttr.setXYZ(i, 1, 0.2, 0.4);
+                        colorAttr.setXYZ(i, 1, 0.3, 0.4);
                     } else {
                         const tIdx = i % msg1Targets.length;
                         tx = msg1Targets[tIdx].x; ty = msg1Targets[tIdx].y;
-                        colorAttr.setXYZ(i, 1, 0.85, 0.1); 
+                        colorAttr.setXYZ(i, 1, 0.9, 0.2); 
                     }
-                    vx += (tx - x) * 0.045; vy += (ty - y) * 0.045;
+                    vx += (tx - x) * 0.05; vy += (ty - y) * 0.05;
                 } else {
-                    if (photoCount >= MAX_PHOTOS) {
+                    if (photoCount >= 15) {
                         const tIdx = i % msg2Targets.length;
-                        tx = msg2Targets[tIdx].x; ty = msg2Targets[tIdx].y;
-                        vx += (tx - x) * 0.05; vy += (ty - y) * 0.05;
-                        colorAttr.setXYZ(i, 1, 0.35, 0.65); 
+                        vx += (msg2Targets[tIdx].x - x) * 0.05; vy += (msg2Targets[tIdx].y - y) * 0.05;
+                        colorAttr.setXYZ(i, 0.2, 0.8, 1); 
                     } else {
                         vx += (Math.random()-0.5) * 0.02; vy += (Math.random()-0.5) * 0.02;
-                        colorAttr.setXYZ(i, 0, 0.9, 1);
+                        colorAttr.setXYZ(i, 0.1, 0.9, 1);
                     }
                 }
-                vx *= 0.88; vy *= 0.88; x += vx; y += vy;
+                vx *= 0.85; vy *= 0.85; x += vx; y += vy;
                 velocities[i*3] = vx; velocities[i*3+1] = vy;
                 posAttr.setXY(i, x, y);
             }
