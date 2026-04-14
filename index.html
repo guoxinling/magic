@@ -117,7 +117,7 @@
             else loaderMsg.innerHTML = `正在注入魔法能量... (${imagesProcessed}/15)`;
         }
         function showBtn() {
-            loaderMsg.innerHTML = "所有回忆已就绪<br>请帅气的人类打开摄像头";
+            loaderMsg.innerHTML = "所有回忆已就绪<br>请帅气的人类打开摄像头，将手掌一开一合就能开启魔法";
             startBtn.style.display = "block";
         }
         preload();
@@ -196,7 +196,7 @@
         const heartTargets = new Float32Array(count * 3);
         
         const msg1Targets = createTextPoints("老公 生日快乐 🎂", 85, 0.12);
-        const msg2Targets = createTextPoints("我会一直陪着你 ❤️", 95, 0.14);
+        const msg2Targets = createTextPoints("我爱你 ❤️", 95, 0.14);
 
         for(let i = 0; i < count; i++) {
             const t = Math.random() * Math.PI * 2;
