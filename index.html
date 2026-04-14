@@ -2,21 +2,19 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>生日魔法惊喜 - 终极版</title>
+    <title>生日魔法惊喜</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: "Microsoft YaHei", sans-serif; }
         #loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
         .magic-text { font-size: 18px; color: #00e5ff; margin-bottom: 30px; text-align: center; line-height: 1.6; }
         #start-btn { padding: 15px 40px; font-size: 20px; color: #fff; background: transparent; border: 2px solid #00e5ff; border-radius: 30px; cursor: pointer; box-shadow: 0 0 15px #00e5ff; display: none; }
-        #status { position: fixed; top: 20px; left: 20px; color: #00e5ff; font-size: 18px; background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 20px; border: 1px solid #00e5ff; z-index: 50; }
+        #status { position: fixed; top: 20px; left: 20px; color: #00e5ff; font-size: 16px; background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 20px; border: 1px solid #00e5ff; z-index: 50; pointer-events: none; }
         #photo-display { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); max-width: 80%; max-height: 60%; border: 8px solid white; box-shadow: 0 20px 50px rgba(0,0,0,0.9); display: none; z-index: 5; }
-        #photo-caption { position: absolute; top: 80%; left: 50%; transform: translateX(-50%); color: white; font-size: 26px; text-shadow: 0 0 15px #000; text-align: center; width: 90%; z-index: 60; display: none; font-weight: bold; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 10px; }
+        #photo-caption { position: absolute; top: 82%; left: 50%; transform: translateX(-50%); color: white; font-size: 24px; text-shadow: 0 0 10px #000; text-align: center; width: 90%; z-index: 60; display: none; font-weight: bold; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 10px; }
         #video-input { position: fixed; transform: scaleX(-1); width: 120px; bottom: 15px; right: 15px; opacity: 0.3; z-index: 10; border-radius: 10px; }
     </style>
 </head>
-<body>
-
-    <audio id="audio-bgm" src="./audio/bgm.mp3" loop></audio>
+<body onclick="if(phase==='CANDLE') triggerFinalSurprise()"> <audio id="audio-bgm" src="./audio/bgm.mp3" loop></audio>
     <audio id="audio-birthday" src="./audio/birthday.mp3"></audio>
     <audio id="audio-fireworks" src="./audio/fireworks.mp3"></audio>
 
@@ -37,24 +35,23 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // --- 文案配置 ---
+        // --- 文案配置 (请确认这里的文字) ---
         const photoCaptions = [
-             "应该是我给你拍的第一张照片吧",
-            "这小伙子侧脸挺帅啊",
+            "应该是我给你拍的第一张照片吧",
+            "这小伙子侧脸挺帅啊，/花痴脸",
             "唯二的结婚合照，噗/太可怜了",
             "最喜欢这一张了，又帅又阳光",
             "交友软件里的绝杀照吧，/坏笑",
             "我朋友圈的官宣照",
             "命运齿轮在此刻开始转动了",
-            "好奇，还抱得动我吗？",
+            "/好奇，还抱得动我吗？",
             "恭喜你和我一起出月子",
             "还记得这在哪里吗？",
             "还记得这在哪里吗？",
             "还记得这在哪里吗？",
-            "被迫营业笑一下吧",
+            "被迫营业笑了一下",
             "一脸慈祥的富家少爷",
-            "哟吼这小伙子嫩帅哩！结束后请继续捏合双手...",
-            "这是最后一张照片，准备好迎接惊喜了吗？"
+            "哟吼这小伙子嫩帅哩！", "请继续捏合双手 🌟"
         ];
 
         const photoUrls = Array.from({length: 15}, (_, i) => `./images/pic${i+1}.jpg`);
@@ -68,11 +65,12 @@
 
         let photoCount = 0;
         let imagesProcessed = 0;
-        let phase = "PHOTOS"; // PHOTOS -> BIRTHDAY_MSG -> LOVE_MSG -> CANDLE -> FINISHED
+        let phase = "PHOTOS"; 
+        let currentMode = "FREE"; // HEART 或 FREE
         let isArmed = false;
         let candleBlown = false;
 
-        // --- 麦克风检测逻辑 ---
+        // --- 麦克风感应 ---
         let analyser, dataArray;
         async function initBlowDetection() {
             try {
@@ -84,19 +82,20 @@
                 microphone.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
                 checkBlow();
-            } catch (err) { console.warn("麦克风权限被拒绝"); }
+            } catch (err) { statusElement.innerHTML = "麦克风未授权，可点击屏幕吹灭"; }
         }
 
         function checkBlow() {
             if (phase === "CANDLE" && !candleBlown) {
                 analyser.getByteFrequencyData(dataArray);
-                let sum = dataArray.reduce((a, b) => a + b, 0);
-                if ((sum / dataArray.length) > 75) triggerFinalSurprise();
+                let avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+                if (avg > 70) triggerFinalSurprise(); // 吹气阈值
             }
             requestAnimationFrame(checkBlow);
         }
 
-        function triggerFinalSurprise() {
+        window.triggerFinalSurprise = function() {
+            if (candleBlown) return;
             candleBlown = true;
             phase = "FINISHED";
             audioBgm.pause();
@@ -104,10 +103,9 @@
             setTimeout(() => {
                 audioBirthday.play();
                 triggerBurst(3.5);
-                captionElement.innerHTML = "🎂 老公我爱你 🎂";
-                statusElement.innerHTML = "❤️ HAPPY BIRTHDAY ❤️";
+                captionElement.innerHTML = "🎂 所有的愿望都会成真 🎂";
             }, 600);
-        }
+        };
 
         // --- 预加载 ---
         function preload() {
@@ -118,7 +116,7 @@
             });
         }
         function showBtn() {
-            document.getElementById('loader-msg').innerHTML = "所有回忆已就绪<br>请帅气的人类打开摄像头";
+            document.getElementById('loader-msg').innerHTML = "所有回忆已就绪<br>请帅气的人类打开摄像头麦克风，手掌开合即可召唤魔法";
             startBtn.style.display = "block";
         }
         preload();
@@ -141,6 +139,7 @@
         function onResults(results) {
             document.getElementById('loader').style.display = 'none';
             if(phase === "PHOTOS") statusElement.innerHTML = `魔法进度: ${photoCount} / 15`;
+            else if(phase === "CANDLE") statusElement.innerHTML = "🕯️ 许愿时刻";
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const marks = results.multiHandLandmarks[0];
@@ -150,12 +149,12 @@
                 fingertips.forEach(f => avgDist += Math.hypot(f.x - wrist.x, f.y - wrist.y));
                 avgDist /= 4;
 
-                if (avgDist < 0.28) { // 捏合
+                if (avgDist < 0.28) { // 捏合动作
+                    currentMode = "HEART";
                     if (!isArmed) {
                         photoElement.style.display = 'none';
                         captionElement.style.display = 'none';
-                        
-                        // 逻辑切换核心
+                        // 阶段流转
                         if (photoCount >= 15) {
                             if (phase === "PHOTOS") phase = "BIRTHDAY_MSG";
                             else if (phase === "BIRTHDAY_MSG") phase = "LOVE_MSG";
@@ -167,10 +166,11 @@
                         }
                         isArmed = true;
                     }
-                } else if (avgDist > 0.45) { // 张开
+                } else if (avgDist > 0.45) { // 张开动作
+                    currentMode = "FREE";
                     if (isArmed) {
                         triggerBurst(1.8); 
-                        if (photoCount < 15) {
+                        if (photoCount < 15 && phase === "PHOTOS") {
                             photoElement.src = photoUrls[photoCount];
                             photoElement.style.display = 'block';
                             captionElement.innerHTML = photoCaptions[photoCount];
@@ -183,7 +183,7 @@
             }
         }
 
-        // --- Three.js 粒子效果 ---
+        // --- Three.js 粒子引擎 ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -197,6 +197,14 @@
         const velocities = new Float32Array(count * 3);
         const colors = new Float32Array(count * 3);
         
+        // 形态目标
+        const heartTargets = new Float32Array(count * 3);
+        for(let i = 0; i < count; i++) {
+            const t = Math.random() * Math.PI * 2;
+            heartTargets[i*3] = 16 * Math.pow(Math.sin(t), 3) * 0.45;
+            heartTargets[i*3+1] = (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) * 0.45;
+        }
+
         const candleTargets = new Float32Array(count * 3);
         for(let i=0; i<count; i++) {
             if(i < count * 0.8) { // 烛身
@@ -226,7 +234,7 @@
         }
 
         const msg1Targets = createTextPoints("老公 生日快乐 🎂", 85, 0.12);
-        const msg2Targets = createTextPoints("我会一直陪着你 ❤️", 95, 0.14);
+        const msg2Targets = createTextPoints("我爱你 ❤️", 95, 0.14);
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -252,31 +260,34 @@
             for(let i = 0; i < count; i++) {
                 let x = posAttr.getX(i), y = posAttr.getY(i);
                 let vx = velocities[i*3], vy = velocities[i*3+1];
-                let tx, ty;
+                let tx = x, ty = y;
 
-                if (phase === "BIRTHDAY_MSG") {
+                // 核心视觉逻辑
+                if (currentMode === "HEART" && phase === "PHOTOS") { // 普通照片阶段的爱心
+                    tx = heartTargets[i*3]; ty = heartTargets[i*3+1];
+                    colorAttr.setXYZ(i, 1, 0.4, 0.4); 
+                } else if (phase === "BIRTHDAY_MSG") { // 表白1
                     const tIdx = i % msg1Targets.length;
                     tx = msg1Targets[tIdx].x; ty = msg1Targets[tIdx].y;
                     colorAttr.setXYZ(i, 1, 0.8, 0.2); 
-                    vx += (tx - x) * 0.07; vy += (ty - y) * 0.07;
-                } else if (phase === "LOVE_MSG") {
+                } else if (phase === "LOVE_MSG") { // 表白2
                     const tIdx = i % msg2Targets.length;
                     tx = msg2Targets[tIdx].x; ty = msg2Targets[tIdx].y;
                     colorAttr.setXYZ(i, 1, 0.3, 0.5); 
-                    vx += (tx - x) * 0.07; vy += (ty - y) * 0.07;
-                } else if (phase === "CANDLE") {
+                } else if (phase === "CANDLE") { // 蜡烛
                     tx = candleTargets[i*3]; ty = candleTargets[i*3+1];
                     colorAttr.setXYZ(i, 1, 0.9, 0.5); 
-                    vx += (tx - x) * 0.07; vy += (ty - y) * 0.07;
-                } else if (phase === "FINISHED") {
+                } else if (phase === "FINISHED") { // 结束后的文字
                     const tIdx = i % msg1Targets.length;
-                    vx += (msg1Targets[tIdx].x - x) * 0.04; vy += (msg1Targets[tIdx].y - y) * 0.04;
+                    tx = msg1Targets[tIdx].x; ty = msg1Targets[tIdx].y;
                     colorAttr.setXYZ(i, 1, 0.2, 0.2);
-                } else {
+                } else { // 自由散开
                     vx += (Math.random()-0.5) * 0.03; vy += (Math.random()-0.5) * 0.03;
                     colorAttr.setXYZ(i, 0.1, 0.9, 1);
                 }
 
+                // 物理运动平滑
+                if (tx !== x) { vx += (tx - x) * 0.08; vy += (ty - y) * 0.08; }
                 vx *= 0.85; vy *= 0.85; x += vx; y += vy;
                 velocities[i*3] = vx; velocities[i*3+1] = vy;
                 posAttr.setXY(i, x, y);
