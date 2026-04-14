@@ -6,44 +6,42 @@
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: "Microsoft YaHei", sans-serif; }
         
-        /* 加载与启动界面 */
+        /* 加载界面 */
         #loader {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #000; color: #fff; display: flex; flex-direction: column;
             align-items: center; justify-content: center; z-index: 100;
-            padding: 20px; text-align: center;
         }
-        .sparkle-loader { font-size: 60px; animation: magicFlash 2s infinite; margin-bottom: 20px; }
-        @keyframes magicFlash { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.1); } }
-        
-        .magic-text { font-size: 18px; color: #00e5ff; margin-bottom: 30px; line-height: 1.6; }
-
-        /* 启动按钮 */
+        .magic-text { font-size: 18px; color: #00e5ff; margin-bottom: 30px; text-align: center; }
         #start-btn {
             padding: 15px 40px; font-size: 20px; color: #fff;
             background: transparent; border: 2px solid #00e5ff; border-radius: 30px;
-            cursor: pointer; transition: all 0.3s; box-shadow: 0 0 15px #00e5ff;
-            display: none; animation: pulse 1.5s infinite;
+            cursor: pointer; box-shadow: 0 0 15px #00e5ff; display: none;
         }
-        #start-btn:hover { background: #00e5ff; color: #000; }
-        @keyframes pulse { 0% { box-shadow: 0 0 5px #00e5ff; } 50% { box-shadow: 0 0 25px #00e5ff; } 100% { box-shadow: 0 0 5px #00e5ff; } }
 
-        /* 视频小窗 */
-        #video-input { position: fixed; transform: scaleX(-1); width: 140px; bottom: 15px; right: 15px; border: 2px solid #00e5ff; border-radius: 10px; opacity: 0.3; z-index: 10; }
-        
-        /* 照片展示 */
+        /* 左上角进度提示 */
+        #status { 
+            position: fixed; top: 20px; left: 20px; color: #00e5ff; 
+            font-size: 18px; font-family: monospace; background: rgba(0,0,0,0.5); 
+            padding: 8px 15px; border-radius: 20px; border: 1px solid #00e5ff; z-index: 50; 
+        }
+
+        /* 照片显示 */
         #photo-display {
             position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%);
             max-width: 80%; max-height: 60%; border: 8px solid white; 
             box-shadow: 0 20px 50px rgba(0,0,0,0.9); display: none; z-index: 5;
         }
 
-        /* 每张照片的文案 */
+        /* 照片文案 - 提高层级 */
         #photo-caption {
-            position: absolute; top: 82%; left: 50%; transform: translateX(-50%);
-            color: white; font-size: 24px; text-shadow: 2px 2px 10px rgba(0,0,0,1);
-            text-align: center; width: 90%; z-index: 6; display: none; font-weight: bold;
+            position: absolute; top: 80%; left: 50%; transform: translateX(-50%);
+            color: white; font-size: 26px; text-shadow: 0 0 15px rgba(0,0,0,1), 0 0 5px rgba(0,0,0,1);
+            text-align: center; width: 90%; z-index: 60; display: none; font-weight: bold;
+            background: rgba(0,0,0,0.3); padding: 10px; border-radius: 10px;
         }
+
+        #video-input { position: fixed; transform: scaleX(-1); width: 120px; bottom: 15px; right: 15px; opacity: 0.3; z-index: 10; border-radius: 10px; }
     </style>
 </head>
 <body>
@@ -52,12 +50,12 @@
     <audio id="audio-birthday" src="./audio/birthday.mp3"></audio>
 
     <div id="loader">
-        <div class="sparkle-loader">✨</div>
-        <div class="magic-text" id="loader-msg">正在准备魔法能量...</div>
+        <div class="magic-text" id="loader-msg">正在唤醒回忆...</div>
         <button id="start-btn">开启魔法 ✨</button>
     </div>
 
-    <img id="photo-display" src="" alt="回忆">
+    <div id="status">准备就绪</div>
+    <img id="photo-display" src="">
     <div id="photo-caption"></div>
     <video id="video-input" autoplay playsinline></video>
 
@@ -70,11 +68,9 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // ==========================================
-        // 1. 在这里修改你的 15 张照片配文
-        // ==========================================
+        // --- 文案配置 ---
         const photoCaptions = [
-            "应该是我给你拍的第一张照片吧",
+             "应该是我给你拍的第一张照片吧",
             "这小伙子侧脸挺帅啊",
             "唯二的结婚合照，噗/太可怜了",
             "最喜欢这一张了，又帅又阳光",
@@ -96,6 +92,7 @@
         const audioBirthday = document.getElementById('audio-birthday');
         const photoElement = document.getElementById('photo-display');
         const captionElement = document.getElementById('photo-caption');
+        const statusElement = document.getElementById('status');
         const startBtn = document.getElementById('start-btn');
         const loaderMsg = document.getElementById('loader-msg');
         
@@ -105,38 +102,32 @@
         let currentMode = "FREE"; 
         let isArmed = false;
 
-        // 预加载逻辑
-        function preloadAssets() {
+        // 预加载
+        function preload() {
             photoUrls.forEach((url) => {
                 const img = new Image();
                 img.src = url;
-                img.onload = () => { imagesProcessed++; updateProgress(); };
-                img.onerror = () => { imagesProcessed++; updateProgress(); }; 
+                img.onload = () => { imagesProcessed++; updateProg(); };
+                img.onerror = () => { imagesProcessed++; updateProg(); }; 
             });
-            setTimeout(() => { if(startBtn.style.display !== "block") showStartButton(); }, 5000);
+            setTimeout(() => { if(startBtn.style.display !== "block") showBtn(); }, 5000);
         }
-
-        function updateProgress() {
-            if (imagesProcessed >= 15) showStartButton();
-            else loaderMsg.innerHTML = `正在收集美好的回忆... (${imagesProcessed}/15)`;
+        function updateProg() {
+            if (imagesProcessed >= 15) showBtn();
+            else loaderMsg.innerHTML = `正在注入魔法能量... (${imagesProcessed}/15)`;
         }
-
-        function showStartButton() {
-            loaderMsg.innerHTML = "所有回忆已就绪<br>请帅气的人类打开摄像头，准备见证魔法";
+        function showBtn() {
+            loaderMsg.innerHTML = "所有回忆已就绪<br>请帅气的人类打开摄像头";
             startBtn.style.display = "block";
         }
-        preloadAssets();
+        preload();
 
-        // 启动魔法
         startBtn.onclick = () => {
-            audioBgm.play().catch(e => console.log("等待交互"));
+            audioBgm.play();
             startBtn.style.display = "none";
-            loaderMsg.innerHTML = "正在启动魔法感应器...";
-            
             const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.75, minTrackingConfidence: 0.75 });
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
             hands.onResults(onResults);
-
             const cameraUtils = new Camera(document.getElementById('video-input'), {
                 onFrame: async () => { await hands.send({image: document.getElementById('video-input')}); },
                 width: 640, height: 480
@@ -147,6 +138,9 @@
 
         function onResults(results) {
             document.getElementById('loader').style.display = 'none';
+            // 更新进度显示
+            statusElement.innerHTML = `魔法进度: ${photoCount} / 15`;
+
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const marks = results.multiHandLandmarks[0];
                 const wrist = marks[0];
@@ -165,6 +159,7 @@
                             audioBgm.pause();
                             audioBirthday.play();
                             isBirthdayMode = true;
+                            statusElement.innerHTML = "❤️ 生日快乐 ❤️";
                         }
                     }
                 } else if (avgDist > 0.45) { // 张开
@@ -173,6 +168,7 @@
                         if (photoCount < 15) {
                             photoElement.src = photoUrls[photoCount];
                             photoElement.style.display = 'block';
+                            // 显示对应文案
                             captionElement.innerHTML = photoCaptions[photoCount];
                             captionElement.style.display = 'block';
                             photoCount++;
@@ -184,7 +180,7 @@
             }
         }
 
-        // --- 粒子系统初始化 ---
+        // --- 粒子系统 (保持原有逻辑) ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -199,11 +195,8 @@
         const colors = new Float32Array(count * 3);
         const heartTargets = new Float32Array(count * 3);
         
-        // ==========================================
-        // 2. 在这里修改最后的告白文字内容
-        // ==========================================
         const msg1Targets = createTextPoints("老公 生日快乐 🎂", 85, 0.12);
-        const msg2Targets = createTextPoints("我爱你 ❤️", 95, 0.14);
+        const msg2Targets = createTextPoints("我会一直陪着你 ❤️", 95, 0.14);
 
         for(let i = 0; i < count; i++) {
             const t = Math.random() * Math.PI * 2;
@@ -219,10 +212,10 @@
         scene.add(points);
         camera.position.z = 25;
 
-        function triggerBurst(power) {
+        function triggerBurst(p) {
             for(let i=0; i<count; i++) {
-                velocities[i*3] += (Math.random()-0.5) * 25 * power;
-                velocities[i*3+1] += (Math.random()-0.5) * 25 * power;
+                velocities[i*3] += (Math.random()-0.5) * 25 * p;
+                velocities[i*3+1] += (Math.random()-0.5) * 25 * p;
             }
         }
 
