@@ -6,21 +6,31 @@
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: "Microsoft YaHei", sans-serif; }
         
-        /* 充满魔力感的加载遮罩 */
+        /* 加载与启动界面 */
         #loader {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #000; color: #ff4d4d; display: flex; flex-direction: column;
             align-items: center; justify-content: center; z-index: 100;
-            padding: 20px; text-align: center; line-height: 1.6;
+            padding: 20px; text-align: center;
         }
-        .sparkle-loader { font-size: 60px; animation: magicFlash 2s infinite; margin-bottom: 30px; }
-        @keyframes magicFlash { 0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); } 50% { opacity: 0.4; transform: scale(1.2) rotate(10deg); } }
+        .sparkle-loader { font-size: 60px; animation: magicFlash 2s infinite; margin-bottom: 20px; }
+        @keyframes magicFlash { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.1); } }
         
-        .magic-text { font-size: 20px; letter-spacing: 2px; color: #00e5ff; }
+        .magic-text { font-size: 18px; letter-spacing: 1px; color: #00e5ff; margin-bottom: 30px; line-height: 1.6; }
+
+        /* 魔法启动按钮 */
+        #start-btn {
+            padding: 15px 40px; font-size: 20px; color: #fff;
+            background: transparent; border: 2px solid #00e5ff; border-radius: 30px;
+            cursor: pointer; transition: all 0.3s; box-shadow: 0 0 15px #00e5ff;
+            display: none; /* 初始隐藏，等照片预加载完显示 */
+            animation: pulse 1.5s infinite;
+        }
+        #start-btn:hover { background: #00e5ff; color: #000; box-shadow: 0 0 30px #00e5ff; }
+        @keyframes pulse { 0% { box-shadow: 0 0 5px #00e5ff; } 50% { box-shadow: 0 0 25px #00e5ff; } 100% { box-shadow: 0 0 5px #00e5ff; } }
 
         #video-input { position: fixed; transform: scaleX(-1); width: 140px; bottom: 15px; right: 15px; border: 2px solid #00e5ff; border-radius: 10px; opacity: 0.1; z-index: 10; }
         #status { position: fixed; top: 20px; left: 20px; color: #00e5ff; font-family: monospace; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; border-left: 3px solid #00e5ff; z-index: 10; }
-        
         #photo-display {
             position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
             width: 350px; border: 10px solid white; box-shadow: 0 25px 60px rgba(0,0,0,0.8);
@@ -30,15 +40,18 @@
 </head>
 <body>
 
+    <audio id="audio-bgm" src="./audio/bgm.mp3" loop></audio>
+    <audio id="audio-birthday" src="./audio/birthday.mp3"></audio>
+
     <div id="loader">
         <div class="sparkle-loader">✨</div>
-        <div class="magic-text">
-            请帅气的人类打开摄像头，将手放在摄像头前，准备施展魔法吧。<br>
-            你只需要一张一合，试试吧！
+        <div class="magic-text" id="loader-msg">
+            正在注入魔法能量，请稍候...
         </div>
+        <button id="start-btn">开启魔法 ✨</button>
     </div>
 
-    <div id="status">魔法能量填充中...</div>
+    <div id="status">准备就绪</div>
     <img id="photo-display" src="" alt="回忆珍藏">
     <video id="video-input" autoplay playsinline></video>
 
@@ -51,11 +64,143 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // --- 1. 资源与计数 ---
         const photoUrls = Array.from({length: 15}, (_, i) => `./images/pic${i+1}.jpg`);
+        const audioBgm = document.getElementById('audio-bgm');
+        const audioBirthday = document.getElementById('audio-birthday');
         const photoElement = document.getElementById('photo-display');
-        let photoCount = 0;
+        const startBtn = document.getElementById('start-btn');
+        const loaderMsg = document.getElementById('loader-msg');
         const MAX_PHOTOS = 15;
+
+        let photoCount = 0;
+        let imagesLoaded = 0;
+        let isBirthdayMode = false;
+        let currentMode = "FREE"; 
+        let isArmed = false;
+
+        // --- 1. 强力预加载逻辑 ---
+        function preloadAssets() {
+            photoUrls.forEach((url) => {
+                const img = new Image();
+                img.src = url;
+                img.onload = () => {
+                    imagesLoaded++;
+                    checkReady();
+                };
+                img.onerror = () => {
+                    console.warn("跳过加载失败的文件:", url);
+                    imagesLoaded++;
+                    checkReady();
+                };
+            });
+        }
+
+        function checkReady() {
+            if (imagesLoaded >= MAX_PHOTOS) {
+                loaderMsg.innerHTML = "请帅气的人类将手放在摄像头前，准备施展魔法吧！<br>你只需要一张一合，试试吧！";
+                startBtn.style.display = "block"; // 加载完照片后才显示按钮
+            } else {
+                loaderMsg.innerHTML = `魔法能量填充中... (${imagesLoaded}/${MAX_PHOTOS})`;
+            }
+        }
+        preloadAssets();
+
+        // --- 2. 按钮点击启动 ---
+        startBtn.onclick = () => {
+            // 播放背景音乐（解决权限问题）
+            audioBgm.play().catch(e => console.log("音频播放受阻"));
+            
+            // 隐藏按钮，开始摄像头
+            startBtn.style.display = "none";
+            loaderMsg.innerHTML = "正在连接魔法感应器（摄像头）...";
+            
+            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.8, minTrackingConfidence: 0.8 });
+            hands.onResults(onResults);
+
+            const cameraUtils = new Camera(document.getElementById('video-input'), {
+                onFrame: async () => { await hands.send({image: document.getElementById('video-input')}); },
+                width: 640, height: 480
+            });
+            cameraUtils.start();
+            
+            animate(); // 启动渲染
+        };
+
+        // --- 3. 手势与渲染逻辑 ---
+        function onResults(results) {
+            document.getElementById('loader').style.display = 'none';
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const marks = results.multiHandLandmarks[0];
+                const wrist = marks[0];
+                const fingertips = [marks[8], marks[12], marks[16], marks[20]];
+                let avgDist = 0;
+                fingertips.forEach(f => avgDist += Math.hypot(f.x - wrist.x, f.y - wrist.y));
+                avgDist /= 4;
+
+                if (avgDist < 0.25) { // 捏合
+                    if (currentMode !== "HEART") {
+                        photoElement.style.display = 'none';
+                        currentMode = "HEART";
+                        isArmed = true;
+                        if (photoCount >= MAX_PHOTOS && !isBirthdayMode) {
+                            audioBgm.pause();
+                            audioBirthday.play();
+                            isBirthdayMode = true;
+                        }
+                    }
+                } else if (avgDist > 0.48) { // 张开
+                    if (isArmed) {
+                        triggerBurst(1.8); 
+                        if (photoCount < MAX_PHOTOS) {
+                            photoElement.src = photoUrls[photoCount];
+                            photoElement.style.display = 'block';
+                            photoCount++;
+                        }
+                        isArmed = false;
+                    }
+                    currentMode = "FREE";
+                }
+            }
+        }
+
+        // --- Three.js 初始化代码 (保持不变) ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.autoClearColor = false;
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const count = 35000;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(count * 3);
+        const velocities = new Float32Array(count * 3);
+        const colors = new Float32Array(count * 3);
+        const heartTargets = new Float32Array(count * 3);
+        const msg1Targets = createTextPoints("老公 生日快乐 🎂", 85, 0.1);
+        const msg2Targets = createTextPoints("我爱你哦 ❤️", 110, 0.12);
+
+        for(let i = 0; i < count; i++) {
+            const t = Math.random() * Math.PI * 2;
+            heartTargets[i*3] = 16 * Math.pow(Math.sin(t), 3) * 0.45;
+            heartTargets[i*3+1] = (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) * 0.45;
+            positions[i*3] = (Math.random()-0.5)*50; positions[i*3+1] = (Math.random()-0.5)*50;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        const material = new THREE.PointsMaterial({ size: 0.05, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending });
+        const points = new THREE.Points(geometry, material);
+        scene.add(points);
+        camera.position.z = 25;
+
+        function triggerBurst(power) {
+            for(let i=0; i<count; i++) {
+                velocities[i*3] += (Math.random()-0.5) * 20 * power;
+                velocities[i*3+1] += (Math.random()-0.5) * 20 * power;
+            }
+        }
 
         function createTextPoints(text, size, spread) {
             const canvas = document.createElement('canvas');
@@ -77,88 +222,6 @@
             return points;
         }
 
-        const msg1Targets = createTextPoints("老公 生日快乐 🎂", 85, 0.1);
-        const msg2Targets = createTextPoints("我爱你哦 ❤️", 110, 0.12);
-
-        // --- 2. Three.js 核心 ---
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-        renderer.autoClearColor = false;
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
-
-        const count = 35000;
-        const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(count * 3);
-        const velocities = new Float32Array(count * 3);
-        const colors = new Float32Array(count * 3);
-        const heartTargets = new Float32Array(count * 3);
-
-        for(let i = 0; i < count; i++) {
-            const t = Math.random() * Math.PI * 2;
-            heartTargets[i*3] = 16 * Math.pow(Math.sin(t), 3) * 0.45;
-            heartTargets[i*3+1] = (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) * 0.45;
-            positions[i*3] = (Math.random()-0.5)*50; positions[i*3+1] = (Math.random()-0.5)*50;
-        }
-
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        const material = new THREE.PointsMaterial({ size: 0.05, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending });
-        const points = new THREE.Points(geometry, material);
-        scene.add(points);
-        camera.position.z = 25;
-
-        // --- 3. 手势魔法控制 ---
-        let currentMode = "FREE"; 
-        let isArmed = false;
-
-        function onResults(results) {
-            document.getElementById('loader').style.display = 'none';
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const marks = results.multiHandLandmarks[0];
-                const wrist = marks[0];
-                const fingertips = [marks[8], marks[12], marks[16], marks[20]];
-                let avgDist = 0;
-                fingertips.forEach(f => avgDist += Math.hypot(f.x - wrist.x, f.y - wrist.y));
-                avgDist /= 4;
-
-                if (avgDist < 0.25) { // 捏合 - 凝聚魔法
-                    if (currentMode !== "HEART") {
-                        photoElement.style.display = 'none'; // 确保捏合时照片立即消失
-                        currentMode = "HEART";
-                        isArmed = true;
-                        if (photoCount >= MAX_PHOTOS) triggerBurst(0.5); 
-                    }
-                } else if (avgDist > 0.48) { // 张开 - 释放魔法
-                    if (isArmed) {
-                        triggerBurst(1.8); 
-                        if (photoCount < MAX_PHOTOS) {
-                            photoElement.src = photoUrls[photoCount];
-                            photoElement.style.display = 'block';
-                            photoCount++;
-                        }
-                        isArmed = false;
-                    }
-                    currentMode = "FREE";
-                }
-            }
-        }
-
-        function triggerBurst(power) {
-            for(let i=0; i<count; i++) {
-                velocities[i*3] += (Math.random()-0.5) * 20 * power;
-                velocities[i*3+1] += (Math.random()-0.5) * 20 * power;
-            }
-        }
-
-        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.8, minTrackingConfidence: 0.8 });
-        hands.onResults(onResults);
-        const videoElement = document.getElementById('video-input');
-        new Camera(videoElement, { onFrame: async () => { await hands.send({image: videoElement}); }, width: 640, height: 480 }).start();
-
-        // --- 4. 动画循环 ---
         const fadePlane = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 }));
         fadePlane.position.z = -5; scene.add(fadePlane);
 
@@ -166,46 +229,38 @@
             requestAnimationFrame(animate);
             const posAttr = geometry.attributes.position;
             const colorAttr = geometry.attributes.color;
-
             for(let i = 0; i < count; i++) {
                 let x = posAttr.getX(i), y = posAttr.getY(i);
                 let vx = velocities[i*3], vy = velocities[i*3+1];
                 let tx, ty;
-
                 if (currentMode === "HEART") {
                     if (photoCount < MAX_PHOTOS) {
                         tx = heartTargets[i*3]; ty = heartTargets[i*3+1];
-                        colorAttr.setXYZ(i, 1, 0.2, 0.4); // 稳定心形色
+                        colorAttr.setXYZ(i, 1, 0.2, 0.4);
                     } else {
-                        // 惊喜捏合阶段
                         const tIdx = i % msg1Targets.length;
                         tx = msg1Targets[tIdx].x; ty = msg1Targets[tIdx].y;
-                        colorAttr.setXYZ(i, 1, 0.85, 0.1); // 稳定亮金色
+                        colorAttr.setXYZ(i, 1, 0.85, 0.1); 
                     }
                     vx += (tx - x) * 0.045; vy += (ty - y) * 0.045;
                 } else {
                     if (photoCount >= MAX_PHOTOS) {
-                        // 惊喜张开阶段
                         const tIdx = i % msg2Targets.length;
                         tx = msg2Targets[tIdx].x; ty = msg2Targets[tIdx].y;
                         vx += (tx - x) * 0.05; vy += (ty - y) * 0.05;
-                        colorAttr.setXYZ(i, 1, 0.35, 0.65); // 稳定亮粉色
+                        colorAttr.setXYZ(i, 1, 0.35, 0.65); 
                     } else {
                         vx += (Math.random()-0.5) * 0.02; vy += (Math.random()-0.5) * 0.02;
-                        colorAttr.setXYZ(i, 0, 0.9, 1); // 亮青色
+                        colorAttr.setXYZ(i, 0, 0.9, 1);
                     }
                 }
-
-                vx *= 0.88; vy *= 0.88;
-                x += vx; y += vy;
+                vx *= 0.88; vy *= 0.88; x += vx; y += vy;
                 velocities[i*3] = vx; velocities[i*3+1] = vy;
                 posAttr.setXY(i, x, y);
             }
             posAttr.needsUpdate = true; colorAttr.needsUpdate = true;
             renderer.render(scene, camera);
-            document.getElementById('status').innerText = photoCount < MAX_PHOTOS ? `✨ 魔法能量: ${photoCount}/${MAX_PHOTOS}` : "🎂 生日快乐！";
         }
-        animate();
     </script>
 </body>
 </html>
